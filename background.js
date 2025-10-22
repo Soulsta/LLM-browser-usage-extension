@@ -8,7 +8,8 @@ if (browserAPI.runtime.onInstalled) {
       currentConversationTokens: 0,
       dailyTokens: 0,
       lastResetDate: new Date().toDateString(),
-      lastUrl: ''
+      lastUrl: '',
+      selectedPlan: 'pro' // Default to Pro plan
     });
     console.log('Claude Token Tracker: Storage initialized');
   });
