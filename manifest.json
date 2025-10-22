@@ -1,0 +1,30 @@
+{
+  "manifest_version": 2,
+  "name": "Claude Token Tracker",
+  "version": "1.0",
+  "description": "Track your Claude token usage and get warnings before hitting limits",
+  "permissions": [
+    "storage",
+    "https://claude.ai/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "claude-token-tracker@yourdomain.com"
+    }
+  }
+}
