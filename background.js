@@ -6,6 +6,7 @@ if (browserAPI.runtime.onInstalled) {
   browserAPI.runtime.onInstalled.addListener(async () => {
     await browserAPI.storage.local.set({
       currentConversationTokens: 0,
+      currentMessageCount: 0,
       dailyTokens: 0,
       lastResetDate: new Date().toDateString(),
       lastUrl: '',

@@ -8,6 +8,16 @@ const PLAN_LIMITS = {
   max: 2000000       // ~2M tokens/day (higher usage limit)
 };
 
+// Context window limits (how much a single chat can hold)
+const CONTEXT_WINDOW = 200000;  // Claude has ~200k token context window
+
+// Message limits per conversation (approximate - when chat gets "full")
+const MESSAGE_LIMITS = {
+  free: 50,          // Free users might hit limits sooner
+  pro: 100,          // Pro users can have longer chats
+  max: 150           // Max users get most messages per chat
+};
+
 // Image token estimation (based on Claude's vision model)
 const IMAGE_TOKENS = {
   small: 1000,       // Small images ~1k tokens
@@ -36,13 +46,16 @@ function estimateImageTokens(imgElement) {
 
 // Track tokens in the current conversation
 let currentConversationTokens = 0;
+let currentMessageCount = 0;
 let dailyTokens = 0;
 let currentPlan = 'pro'; // Default to Pro plan
 let DAILY_LIMIT = PLAN_LIMITS[currentPlan];
+let MESSAGE_LIMIT = MESSAGE_LIMITS[currentPlan];
 const WARNING_THRESHOLD = 0.8; // Warn at 80%
+const CHAT_WARNING_THRESHOLD = 0.7; // Warn earlier for chat capacity (70%)
 
 // Create warning banner
-function createWarningBanner(percentage) {
+function createWarningBanner(percentage, type = 'daily') {
   const existingBanner = document.getElementById('token-tracker-banner');
   if (existingBanner) existingBanner.remove();
 
@@ -51,17 +64,32 @@ function createWarningBanner(percentage) {
   banner.className = 'token-tracker-banner';
 
   let message, severity;
-  if (percentage >= 0.95) {
-    message = `⚠️ CRITICAL: ${Math.round(percentage * 100)}% of daily tokens used!`;
-    severity = 'critical';
-  } else if (percentage >= 0.8) {
-    message = `⚠️ WARNING: ${Math.round(percentage * 100)}% of daily tokens used`;
-    severity = 'warning';
+
+  if (type === 'chat') {
+    // Chat capacity warnings
+    if (percentage >= 0.9) {
+      message = `💬 CHAT ALMOST FULL: ${Math.round(percentage * 100)}% capacity - Consider starting a new chat!`;
+      severity = 'critical';
+    } else if (percentage >= 0.7) {
+      message = `💬 Chat getting full: ${Math.round(percentage * 100)}% capacity`;
+      severity = 'warning';
+    }
+  } else {
+    // Daily limit warnings
+    if (percentage >= 0.95) {
+      message = `⚠️ CRITICAL: ${Math.round(percentage * 100)}% of daily tokens used!`;
+      severity = 'critical';
+    } else if (percentage >= 0.8) {
+      message = `⚠️ WARNING: ${Math.round(percentage * 100)}% of daily tokens used`;
+      severity = 'warning';
+    }
   }
 
-  banner.textContent = message;
-  banner.className += ` ${severity}`;
-  document.body.prepend(banner);
+  if (message) {
+    banner.textContent = message;
+    banner.className += ` ${severity}`;
+    document.body.prepend(banner);
+  }
 }
 
 // Monitor messages being sent and received
@@ -92,19 +120,30 @@ function observeMessages() {
 
             // Update counters
             currentConversationTokens += tokens;
+            currentMessageCount += 1;
             dailyTokens += tokens;
 
             // Save to storage
             await browserAPI.storage.local.set({
               currentConversationTokens,
+              currentMessageCount,
               dailyTokens,
               lastUpdate: Date.now()
             });
 
-            // Check if we should show warning
-            const percentage = dailyTokens / DAILY_LIMIT;
-            if (percentage >= WARNING_THRESHOLD) {
-              createWarningBanner(percentage);
+            // Check daily limit warnings
+            const dailyPercentage = dailyTokens / DAILY_LIMIT;
+            if (dailyPercentage >= WARNING_THRESHOLD) {
+              createWarningBanner(dailyPercentage, 'daily');
+            }
+
+            // Check chat capacity warnings (context window OR message count)
+            const contextPercentage = currentConversationTokens / CONTEXT_WINDOW;
+            const messagePercentage = currentMessageCount / MESSAGE_LIMIT;
+            const chatPercentage = Math.max(contextPercentage, messagePercentage);
+
+            if (chatPercentage >= CHAT_WARNING_THRESHOLD) {
+              createWarningBanner(chatPercentage, 'chat');
             }
           });
         }
@@ -127,14 +166,24 @@ function addTokenCounter() {
   counter.className = 'token-counter';
 
   async function updateCounter() {
-    const data = await browserAPI.storage.local.get(['currentConversationTokens', 'dailyTokens', 'selectedPlan']);
+    const data = await browserAPI.storage.local.get(['currentConversationTokens', 'currentMessageCount', 'dailyTokens', 'selectedPlan']);
     const current = data.currentConversationTokens || 0;
+    const messages = data.currentMessageCount || 0;
     const daily = data.dailyTokens || 0;
     const plan = data.selectedPlan || 'pro';
     currentPlan = plan;
     DAILY_LIMIT = PLAN_LIMITS[plan];
+    MESSAGE_LIMIT = MESSAGE_LIMITS[plan];
 
-    const percentage = (daily / DAILY_LIMIT * 100).toFixed(1);
+    const dailyPercentage = (daily / DAILY_LIMIT * 100).toFixed(1);
+    const contextPercentage = (current / CONTEXT_WINDOW * 100).toFixed(1);
+    const messagePercentage = (messages / MESSAGE_LIMIT * 100).toFixed(1);
+    const chatCapacity = Math.max(parseFloat(contextPercentage), parseFloat(messagePercentage));
+
+    // Determine chat status color
+    let chatStatusClass = 'chat-status-good';
+    if (chatCapacity >= 90) chatStatusClass = 'chat-status-critical';
+    else if (chatCapacity >= 70) chatStatusClass = 'chat-status-warning';
 
     counter.innerHTML = `
       <div class="counter-header">
@@ -145,10 +194,16 @@ function addTokenCounter() {
           <option value="max" ${plan === 'max' ? 'selected' : ''}>Max</option>
         </select>
       </div>
-      <div class="counter-stat">This Chat: ~${current.toLocaleString()} tokens</div>
-      <div class="counter-stat">Today: ~${daily.toLocaleString()} / ${DAILY_LIMIT.toLocaleString()} (${percentage}%)</div>
+
+      <div class="section-divider">This Chat</div>
+      <div class="counter-stat">Messages: ${messages} / ${MESSAGE_LIMIT} (${messagePercentage}%)</div>
+      <div class="counter-stat">Tokens: ~${current.toLocaleString()} / ${CONTEXT_WINDOW.toLocaleString()} (${contextPercentage}%)</div>
+      <div class="counter-stat ${chatStatusClass}">Chat Capacity: ${chatCapacity.toFixed(0)}%</div>
+
+      <div class="section-divider">Today Total</div>
+      <div class="counter-stat">Today: ~${daily.toLocaleString()} / ${DAILY_LIMIT.toLocaleString()} (${dailyPercentage}%)</div>
       <div class="counter-bar">
-        <div class="counter-bar-fill" style="width: ${Math.min(percentage, 100)}%"></div>
+        <div class="counter-bar-fill" style="width: ${Math.min(dailyPercentage, 100)}%"></div>
       </div>
       <div class="counter-note">Includes text + images</div>
     `;
@@ -161,6 +216,7 @@ function addTokenCounter() {
         await browserAPI.storage.local.set({ selectedPlan: newPlan });
         currentPlan = newPlan;
         DAILY_LIMIT = PLAN_LIMITS[newPlan];
+        MESSAGE_LIMIT = MESSAGE_LIMITS[newPlan];
         updateCounter(); // Refresh display
       });
     }
@@ -190,11 +246,13 @@ async function checkDailyReset() {
 async function initialize() {
   console.log('Claude Token Tracker: Initializing...');
 
-  const data = await browserAPI.storage.local.get(['currentConversationTokens', 'dailyTokens', 'selectedPlan']);
+  const data = await browserAPI.storage.local.get(['currentConversationTokens', 'currentMessageCount', 'dailyTokens', 'selectedPlan']);
   currentConversationTokens = data.currentConversationTokens || 0;
+  currentMessageCount = data.currentMessageCount || 0;
   dailyTokens = data.dailyTokens || 0;
   currentPlan = data.selectedPlan || 'pro';
   DAILY_LIMIT = PLAN_LIMITS[currentPlan];
+  MESSAGE_LIMIT = MESSAGE_LIMITS[currentPlan];
 
   console.log('Loaded token data:', data);
 
@@ -220,8 +278,10 @@ setTimeout(() => {
         const data = await browserAPI.storage.local.get(['lastUrl']);
         if (data.lastUrl !== currentUrl) {
           currentConversationTokens = 0;
+          currentMessageCount = 0;
           await browserAPI.storage.local.set({
             currentConversationTokens: 0,
+            currentMessageCount: 0,
             lastUrl: currentUrl
           });
         }
