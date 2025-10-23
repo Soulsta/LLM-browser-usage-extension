@@ -14,7 +14,8 @@ if (browserAPI.runtime.onInstalled) {
       counterLocked: false, // Default to unlocked
       counterPosition: null, // Will be set when user drags
       counterSize: null, // Will be set when user resizes
-      counterVisible: true // Default to visible
+      counterVisible: true, // Default to visible
+      counterMinimized: false // Default to expanded
     });
     console.log('Claude Token Tracker: Storage initialized');
   });

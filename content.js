@@ -286,6 +286,7 @@ function addTokenCounter() {
   counter.className = 'token-counter';
 
   let isLocked = false;
+  let isMinimized = false;
 
   async function updateCounter() {
     const data = await browserAPI.storage.local.get([
@@ -296,7 +297,8 @@ function addTokenCounter() {
       'counterLocked',
       'counterPosition',
       'counterSize',
-      'counterVisible'
+      'counterVisible',
+      'counterMinimized'
     ]);
 
     // Check if user has hidden the counter
@@ -310,6 +312,7 @@ function addTokenCounter() {
     const daily = data.dailyTokens || 0;
     const plan = data.selectedPlan || 'pro';
     isLocked = data.counterLocked !== undefined ? data.counterLocked : false;
+    isMinimized = data.counterMinimized !== undefined ? data.counterMinimized : false;
 
     currentPlan = plan;
     DAILY_LIMIT = PLAN_LIMITS[plan];
@@ -327,39 +330,68 @@ function addTokenCounter() {
 
     const lockIcon = isLocked ? '🔒' : '🔓';
     const lockTitle = isLocked ? 'Locked (click to unlock)' : 'Unlocked (click to lock)';
+    const minimizeIcon = isMinimized ? '▲' : '▼';
+    const minimizeTitle = isMinimized ? 'Expand' : 'Minimize';
 
-    counter.innerHTML = `
-      <div class="drag-handle" style="cursor: ${isLocked ? 'default' : 'grab'};">
-        <div class="counter-header">
-          <div class="counter-title">Token Usage</div>
-          <div class="header-controls">
-            <button id="close-button" class="close-button" title="Hide counter">×</button>
-            <button id="lock-button" class="lock-button" title="${lockTitle}">${lockIcon}</button>
-            <select id="plan-selector" class="plan-selector">
-              <option value="free" ${plan === 'free' ? 'selected' : ''}>Free</option>
-              <option value="pro" ${plan === 'pro' ? 'selected' : ''}>Pro</option>
-              <option value="max" ${plan === 'max' ? 'selected' : ''}>Max</option>
-            </select>
+    // Apply minimized class
+    if (isMinimized) {
+      counter.classList.add('minimized');
+    } else {
+      counter.classList.remove('minimized');
+    }
+
+    if (isMinimized) {
+      // Minimized view - compact
+      counter.innerHTML = `
+        <div class="drag-handle" style="cursor: ${isLocked ? 'default' : 'grab'};">
+          <div class="counter-header">
+            <div class="counter-title-compact">
+              <span class="${chatStatusClass}">Chat: ${chatCapacity.toFixed(0)}%</span>
+            </div>
+            <div class="header-controls">
+              <button id="minimize-button" class="minimize-button" title="${minimizeTitle}">${minimizeIcon}</button>
+              <button id="close-button" class="close-button" title="Hide counter">×</button>
+              <button id="lock-button" class="lock-button" title="${lockTitle}">${lockIcon}</button>
+            </div>
           </div>
         </div>
-      </div>
-
-      <div class="counter-content">
-        <div class="section-divider">This Chat</div>
-        <div class="counter-stat">Messages: ${messages} / ${MESSAGE_LIMIT} (${messagePercentage}%)</div>
-        <div class="counter-stat">Tokens: ~${current.toLocaleString()} / ${CONTEXT_WINDOW.toLocaleString()} (${contextPercentage}%)</div>
-        <div class="counter-stat ${chatStatusClass}">Chat Capacity: ${chatCapacity.toFixed(0)}%</div>
-
-        <div class="section-divider">Today Total</div>
-        <div class="counter-stat">Today: ~${daily.toLocaleString()} / ${DAILY_LIMIT.toLocaleString()} (${dailyPercentage}%)</div>
-        <div class="counter-bar">
-          <div class="counter-bar-fill" style="width: ${Math.min(dailyPercentage, 100)}%"></div>
+      `;
+    } else {
+      // Expanded view - full details
+      counter.innerHTML = `
+        <div class="drag-handle" style="cursor: ${isLocked ? 'default' : 'grab'};">
+          <div class="counter-header">
+            <div class="counter-title">Token Usage</div>
+            <div class="header-controls">
+              <button id="minimize-button" class="minimize-button" title="${minimizeTitle}">${minimizeIcon}</button>
+              <button id="close-button" class="close-button" title="Hide counter">×</button>
+              <button id="lock-button" class="lock-button" title="${lockTitle}">${lockIcon}</button>
+              <select id="plan-selector" class="plan-selector">
+                <option value="free" ${plan === 'free' ? 'selected' : ''}>Free</option>
+                <option value="pro" ${plan === 'pro' ? 'selected' : ''}>Pro</option>
+                <option value="max" ${plan === 'max' ? 'selected' : ''}>Max</option>
+              </select>
+            </div>
+          </div>
         </div>
-        <div class="counter-note">Includes text + images</div>
-      </div>
 
-      <div class="resize-handle" style="display: ${isLocked ? 'none' : 'block'};">⋰</div>
-    `;
+        <div class="counter-content">
+          <div class="section-divider">This Chat</div>
+          <div class="counter-stat">Messages: ${messages} / ${MESSAGE_LIMIT} (${messagePercentage}%)</div>
+          <div class="counter-stat">Tokens: ~${current.toLocaleString()} / ${CONTEXT_WINDOW.toLocaleString()} (${contextPercentage}%)</div>
+          <div class="counter-stat ${chatStatusClass}">Chat Capacity: ${chatCapacity.toFixed(0)}%</div>
+
+          <div class="section-divider">Today Total</div>
+          <div class="counter-stat">Today: ~${daily.toLocaleString()} / ${DAILY_LIMIT.toLocaleString()} (${dailyPercentage}%)</div>
+          <div class="counter-bar">
+            <div class="counter-bar-fill" style="width: ${Math.min(dailyPercentage, 100)}%"></div>
+          </div>
+          <div class="counter-note">Includes text + images</div>
+        </div>
+
+        <div class="resize-handle" style="display: ${isLocked ? 'none' : 'block'};">⋰</div>
+      `;
+    }
 
     // Restore saved position
     if (data.counterPosition) {
@@ -369,11 +401,25 @@ function addTokenCounter() {
       counter.style.bottom = 'auto';
     }
 
-    // Restore saved size
-    if (data.counterSize) {
+    // Restore saved size (only when expanded)
+    if (!isMinimized && data.counterSize) {
       counter.style.width = data.counterSize.width;
       counter.style.height = data.counterSize.height;
       counter.style.minWidth = '280px';
+    } else if (isMinimized) {
+      counter.style.width = 'auto';
+      counter.style.height = 'auto';
+    }
+
+    // Add event listener to minimize button
+    const minimizeButton = counter.querySelector('#minimize-button');
+    if (minimizeButton) {
+      minimizeButton.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        isMinimized = !isMinimized;
+        await browserAPI.storage.local.set({ counterMinimized: isMinimized });
+        updateCounter();
+      });
     }
 
     // Add event listener to close button
@@ -397,7 +443,7 @@ function addTokenCounter() {
       });
     }
 
-    // Add event listener to plan selector
+    // Add event listener to plan selector (only in expanded view)
     const planSelector = counter.querySelector('#plan-selector');
     if (planSelector) {
       planSelector.addEventListener('change', async (e) => {
@@ -410,11 +456,13 @@ function addTokenCounter() {
       });
     }
 
-    // Enable drag and resize
+    // Enable drag and resize (only when not minimized)
     const dragHandle = counter.querySelector('.drag-handle');
     const resizeHandle = counter.querySelector('.resize-handle');
     makeDraggable(counter, dragHandle, isLocked);
-    makeResizable(counter, resizeHandle, isLocked);
+    if (!isMinimized) {
+      makeResizable(counter, resizeHandle, isLocked);
+    }
   }
 
   updateCounter();
