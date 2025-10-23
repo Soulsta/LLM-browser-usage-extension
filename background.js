@@ -10,7 +10,10 @@ if (browserAPI.runtime.onInstalled) {
       dailyTokens: 0,
       lastResetDate: new Date().toDateString(),
       lastUrl: '',
-      selectedPlan: 'pro' // Default to Pro plan
+      selectedPlan: 'pro', // Default to Pro plan
+      counterLocked: false, // Default to unlocked
+      counterPosition: null, // Will be set when user drags
+      counterSize: null // Will be set when user resizes
     });
     console.log('Claude Token Tracker: Storage initialized');
   });

@@ -157,6 +157,142 @@ function observeMessages() {
   });
 }
 
+// Make counter draggable
+function makeDraggable(counter, isLocked) {
+  let isDragging = false;
+  let currentX;
+  let currentY;
+  let initialX;
+  let initialY;
+  let xOffset = 0;
+  let yOffset = 0;
+
+  const dragHandle = counter.querySelector('.drag-handle');
+
+  if (!dragHandle) return;
+
+  function dragStart(e) {
+    if (isLocked) return;
+
+    if (e.type === 'touchstart') {
+      initialX = e.touches[0].clientX - xOffset;
+      initialY = e.touches[0].clientY - yOffset;
+    } else {
+      initialX = e.clientX - xOffset;
+      initialY = e.clientY - yOffset;
+    }
+
+    if (e.target === dragHandle || dragHandle.contains(e.target)) {
+      isDragging = true;
+      counter.style.cursor = 'grabbing';
+    }
+  }
+
+  function dragEnd(e) {
+    if (!isDragging) return;
+
+    initialX = currentX;
+    initialY = currentY;
+    isDragging = false;
+    counter.style.cursor = 'default';
+
+    // Save position to storage
+    const rect = counter.getBoundingClientRect();
+    browserAPI.storage.local.set({
+      counterPosition: {
+        right: window.innerWidth - rect.right,
+        bottom: window.innerHeight - rect.bottom
+      }
+    });
+  }
+
+  function drag(e) {
+    if (!isDragging || isLocked) return;
+
+    e.preventDefault();
+
+    if (e.type === 'touchmove') {
+      currentX = e.touches[0].clientX - initialX;
+      currentY = e.touches[0].clientY - initialY;
+    } else {
+      currentX = e.clientX - initialX;
+      currentY = e.clientY - initialY;
+    }
+
+    xOffset = currentX;
+    yOffset = currentY;
+
+    setTranslate(currentX, currentY, counter);
+  }
+
+  function setTranslate(xPos, yPos, el) {
+    el.style.transform = `translate(${xPos}px, ${yPos}px)`;
+  }
+
+  dragHandle.addEventListener('mousedown', dragStart);
+  document.addEventListener('mousemove', drag);
+  document.addEventListener('mouseup', dragEnd);
+
+  // Touch events for mobile
+  dragHandle.addEventListener('touchstart', dragStart);
+  document.addEventListener('touchmove', drag);
+  document.addEventListener('touchend', dragEnd);
+}
+
+// Make counter resizable
+function makeResizable(counter, isLocked) {
+  const resizeHandle = counter.querySelector('.resize-handle');
+
+  if (!resizeHandle) return;
+
+  let isResizing = false;
+  let startWidth, startHeight, startX, startY;
+
+  function startResize(e) {
+    if (isLocked) return;
+
+    isResizing = true;
+    startWidth = parseInt(getComputedStyle(counter).width, 10);
+    startHeight = parseInt(getComputedStyle(counter).height, 10);
+    startX = e.clientX;
+    startY = e.clientY;
+
+    e.preventDefault();
+  }
+
+  function doResize(e) {
+    if (!isResizing || isLocked) return;
+
+    const width = startWidth + (e.clientX - startX);
+    const height = startHeight + (e.clientY - startY);
+
+    if (width >= 280) {
+      counter.style.width = width + 'px';
+    }
+    if (height >= 200) {
+      counter.style.height = height + 'px';
+    }
+  }
+
+  function stopResize(e) {
+    if (!isResizing) return;
+
+    isResizing = false;
+
+    // Save size to storage
+    browserAPI.storage.local.set({
+      counterSize: {
+        width: counter.style.width,
+        height: counter.style.height
+      }
+    });
+  }
+
+  resizeHandle.addEventListener('mousedown', startResize);
+  document.addEventListener('mousemove', doResize);
+  document.addEventListener('mouseup', stopResize);
+}
+
 // Add token counter to the page
 function addTokenCounter() {
   console.log('Adding token counter to page...');
@@ -165,12 +301,25 @@ function addTokenCounter() {
   counter.id = 'token-counter';
   counter.className = 'token-counter';
 
+  let isLocked = false;
+
   async function updateCounter() {
-    const data = await browserAPI.storage.local.get(['currentConversationTokens', 'currentMessageCount', 'dailyTokens', 'selectedPlan']);
+    const data = await browserAPI.storage.local.get([
+      'currentConversationTokens',
+      'currentMessageCount',
+      'dailyTokens',
+      'selectedPlan',
+      'counterLocked',
+      'counterPosition',
+      'counterSize'
+    ]);
+
     const current = data.currentConversationTokens || 0;
     const messages = data.currentMessageCount || 0;
     const daily = data.dailyTokens || 0;
     const plan = data.selectedPlan || 'pro';
+    isLocked = data.counterLocked !== undefined ? data.counterLocked : false;
+
     currentPlan = plan;
     DAILY_LIMIT = PLAN_LIMITS[plan];
     MESSAGE_LIMIT = MESSAGE_LIMITS[plan];
@@ -185,28 +334,66 @@ function addTokenCounter() {
     if (chatCapacity >= 90) chatStatusClass = 'chat-status-critical';
     else if (chatCapacity >= 70) chatStatusClass = 'chat-status-warning';
 
+    const lockIcon = isLocked ? '🔒' : '🔓';
+    const lockTitle = isLocked ? 'Locked (click to unlock)' : 'Unlocked (click to lock)';
+
     counter.innerHTML = `
-      <div class="counter-header">
-        <div class="counter-title">Token Usage</div>
-        <select id="plan-selector" class="plan-selector">
-          <option value="free" ${plan === 'free' ? 'selected' : ''}>Free</option>
-          <option value="pro" ${plan === 'pro' ? 'selected' : ''}>Pro</option>
-          <option value="max" ${plan === 'max' ? 'selected' : ''}>Max</option>
-        </select>
+      <div class="drag-handle" style="cursor: ${isLocked ? 'default' : 'grab'};">
+        <div class="counter-header">
+          <div class="counter-title">Token Usage</div>
+          <div class="header-controls">
+            <button id="lock-button" class="lock-button" title="${lockTitle}">${lockIcon}</button>
+            <select id="plan-selector" class="plan-selector">
+              <option value="free" ${plan === 'free' ? 'selected' : ''}>Free</option>
+              <option value="pro" ${plan === 'pro' ? 'selected' : ''}>Pro</option>
+              <option value="max" ${plan === 'max' ? 'selected' : ''}>Max</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      <div class="section-divider">This Chat</div>
-      <div class="counter-stat">Messages: ${messages} / ${MESSAGE_LIMIT} (${messagePercentage}%)</div>
-      <div class="counter-stat">Tokens: ~${current.toLocaleString()} / ${CONTEXT_WINDOW.toLocaleString()} (${contextPercentage}%)</div>
-      <div class="counter-stat ${chatStatusClass}">Chat Capacity: ${chatCapacity.toFixed(0)}%</div>
+      <div class="counter-content">
+        <div class="section-divider">This Chat</div>
+        <div class="counter-stat">Messages: ${messages} / ${MESSAGE_LIMIT} (${messagePercentage}%)</div>
+        <div class="counter-stat">Tokens: ~${current.toLocaleString()} / ${CONTEXT_WINDOW.toLocaleString()} (${contextPercentage}%)</div>
+        <div class="counter-stat ${chatStatusClass}">Chat Capacity: ${chatCapacity.toFixed(0)}%</div>
 
-      <div class="section-divider">Today Total</div>
-      <div class="counter-stat">Today: ~${daily.toLocaleString()} / ${DAILY_LIMIT.toLocaleString()} (${dailyPercentage}%)</div>
-      <div class="counter-bar">
-        <div class="counter-bar-fill" style="width: ${Math.min(dailyPercentage, 100)}%"></div>
+        <div class="section-divider">Today Total</div>
+        <div class="counter-stat">Today: ~${daily.toLocaleString()} / ${DAILY_LIMIT.toLocaleString()} (${dailyPercentage}%)</div>
+        <div class="counter-bar">
+          <div class="counter-bar-fill" style="width: ${Math.min(dailyPercentage, 100)}%"></div>
+        </div>
+        <div class="counter-note">Includes text + images</div>
       </div>
-      <div class="counter-note">Includes text + images</div>
+
+      <div class="resize-handle" style="display: ${isLocked ? 'none' : 'block'};">⋰</div>
     `;
+
+    // Restore saved position
+    if (data.counterPosition) {
+      counter.style.right = data.counterPosition.right + 'px';
+      counter.style.bottom = data.counterPosition.bottom + 'px';
+      counter.style.left = 'auto';
+      counter.style.top = 'auto';
+    }
+
+    // Restore saved size
+    if (data.counterSize) {
+      counter.style.width = data.counterSize.width;
+      counter.style.height = data.counterSize.height;
+      counter.style.minWidth = '280px';
+    }
+
+    // Add event listener to lock button
+    const lockButton = counter.querySelector('#lock-button');
+    if (lockButton) {
+      lockButton.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        isLocked = !isLocked;
+        await browserAPI.storage.local.set({ counterLocked: isLocked });
+        updateCounter();
+      });
+    }
 
     // Add event listener to plan selector
     const planSelector = counter.querySelector('#plan-selector');
@@ -217,9 +404,13 @@ function addTokenCounter() {
         currentPlan = newPlan;
         DAILY_LIMIT = PLAN_LIMITS[newPlan];
         MESSAGE_LIMIT = MESSAGE_LIMITS[newPlan];
-        updateCounter(); // Refresh display
+        updateCounter();
       });
     }
+
+    // Enable drag and resize if not locked
+    makeDraggable(counter, isLocked);
+    makeResizable(counter, isLocked);
   }
 
   updateCounter();
