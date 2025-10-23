@@ -5,25 +5,205 @@
   background: rgba(255, 255, 255, 0.95);
   border: 2px solid #e5e5e5;
   border-radius: 12px;
-  padding: 16px;
-  min-width: 250px;
+  padding: 0;
+  min-width: 300px;
+  max-width: 600px;
+  min-height: 200px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 10000;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   backdrop-filter: blur(10px);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.token-counter.minimized {
+  min-width: 200px;
+  max-width: 250px;
+  min-height: auto;
+  width: auto !important;
+  height: auto !important;
+}
+
+.drag-handle {
+  cursor: grab;
+  user-select: none;
+  padding: 12px 16px 8px 16px;
+  background: linear-gradient(to bottom, rgba(240, 240, 240, 0.5), transparent);
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.counter-content {
+  padding: 8px 16px 16px 16px;
+  overflow-y: auto;
+  max-height: calc(100% - 80px);
+}
+
+.counter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .counter-title {
   font-size: 14px;
   font-weight: 600;
   color: #333;
-  margin-bottom: 10px;
+}
+
+.counter-title-compact {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 2px 0;
+}
+
+.counter-title-compact span {
+  font-weight: 700;
+}
+
+.minimize-button {
+  background: transparent;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: #666;
+  transition: all 0.2s ease;
+  font-weight: bold;
+}
+
+.minimize-button:hover {
+  background: rgba(16, 163, 127, 0.1);
+  border-color: #10a37f;
+  color: #10a37f;
+}
+
+.minimize-button:active {
+  transform: scale(0.9);
+}
+
+.close-button {
+  background: transparent;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: #666;
+  transition: all 0.2s ease;
+  font-weight: bold;
+}
+
+.close-button:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.close-button:active {
+  transform: scale(0.9);
+}
+
+.lock-button {
+  background: transparent;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.lock-button:hover {
+  background: rgba(16, 163, 127, 0.1);
+  border-color: #10a37f;
+}
+
+.lock-button:active {
+  transform: scale(0.95);
+}
+
+.plan-selector {
+  font-size: 11px;
+  padding: 4px 8px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: white;
+  color: #555;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.plan-selector:hover {
+  border-color: #10a37f;
+  background: #f0fdf4;
+}
+
+.plan-selector:focus {
+  outline: none;
+  border-color: #10a37f;
+  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.1);
+}
+
+.section-divider {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 12px 0 8px 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e5e5e5;
 }
 
 .counter-stat {
   font-size: 12px;
   color: #666;
   margin: 6px 0;
+}
+
+.chat-status-good {
+  color: #10a37f;
+  font-weight: 600;
+}
+
+.chat-status-warning {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.chat-status-critical {
+  color: #ef4444;
+  font-weight: 700;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.counter-note {
+  font-size: 10px;
+  color: #999;
+  margin-top: 8px;
+  font-style: italic;
+  text-align: center;
 }
 
 .counter-bar {
@@ -41,7 +221,7 @@
   transition: width 0.3s ease, background 0.3s ease;
 }
 
-.counter-bar-fill[style*="80"], 
+.counter-bar-fill[style*="80"],
 .counter-bar-fill[style*="85"],
 .counter-bar-fill[style*="90"] {
   background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
@@ -50,6 +230,26 @@
 .counter-bar-fill[style*="95"],
 .counter-bar-fill[style*="100"] {
   background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+}
+
+.resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nwse-resize;
+  font-size: 16px;
+  line-height: 1;
+  color: #999;
+  text-align: center;
+  user-select: none;
+  padding: 2px;
+  transition: color 0.2s ease;
+}
+
+.resize-handle:hover {
+  color: #10a37f;
 }
 
 .token-tracker-banner {
@@ -90,16 +290,97 @@
     background: rgba(30, 30, 30, 0.95);
     border-color: #404040;
   }
-  
+
+  .drag-handle {
+    background: linear-gradient(to bottom, rgba(60, 60, 60, 0.5), transparent);
+    border-bottom-color: #505050;
+  }
+
   .counter-title {
     color: #e5e5e5;
   }
-  
+
+  .counter-title-compact {
+    color: #e5e5e5;
+  }
+
+  .minimize-button {
+    border-color: #505050;
+    color: #a0a0a0;
+  }
+
+  .minimize-button:hover {
+    background: rgba(16, 163, 127, 0.2);
+    border-color: #10a37f;
+    color: #34d399;
+  }
+
+  .close-button {
+    border-color: #505050;
+    color: #a0a0a0;
+  }
+
+  .close-button:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #f87171;
+    color: #f87171;
+  }
+
+  .lock-button {
+    border-color: #505050;
+    color: #e5e5e5;
+  }
+
+  .lock-button:hover {
+    background: rgba(16, 163, 127, 0.2);
+    border-color: #10a37f;
+  }
+
+  .plan-selector {
+    background: #2a2a2a;
+    border-color: #505050;
+    color: #d0d0d0;
+  }
+
+  .plan-selector:hover {
+    background: #1a3d33;
+    border-color: #10a37f;
+  }
+
+  .section-divider {
+    color: #a0a0a0;
+    border-bottom-color: #505050;
+  }
+
   .counter-stat {
     color: #a0a0a0;
   }
-  
+
+  .chat-status-good {
+    color: #34d399;
+  }
+
+  .chat-status-warning {
+    color: #fbbf24;
+  }
+
+  .chat-status-critical {
+    color: #f87171;
+  }
+
+  .counter-note {
+    color: #707070;
+  }
+
   .counter-bar {
     background: #404040;
+  }
+
+  .resize-handle {
+    color: #707070;
+  }
+
+  .resize-handle:hover {
+    color: #34d399;
   }
 }

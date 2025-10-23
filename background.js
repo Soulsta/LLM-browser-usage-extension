@@ -3,29 +3,35 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // Initialize storage on install
 if (browserAPI.runtime.onInstalled) {
-  browserAPI.runtime.onInstalled.addListener(() => {
-    browserAPI.storage.local.set({
+  browserAPI.runtime.onInstalled.addListener(async () => {
+    await browserAPI.storage.local.set({
       currentConversationTokens: 0,
+      currentMessageCount: 0,
       dailyTokens: 0,
       lastResetDate: new Date().toDateString(),
-      lastUrl: ''
+      lastUrl: '',
+      selectedPlan: 'pro', // Default to Pro plan
+      counterLocked: false, // Default to unlocked
+      counterPosition: null, // Will be set when user drags
+      counterSize: null, // Will be set when user resizes
+      counterVisible: true, // Default to visible
+      counterMinimized: false // Default to expanded
     });
     console.log('Claude Token Tracker: Storage initialized');
   });
 }
 
 // Reset daily counter at midnight
-function checkMidnightReset() {
-  browserAPI.storage.local.get(['lastResetDate'], (data) => {
-    const today = new Date().toDateString();
-    if (data.lastResetDate !== today) {
-      browserAPI.storage.local.set({
-        dailyTokens: 0,
-        lastResetDate: today
-      });
-      console.log('Claude Token Tracker: Daily counter reset');
-    }
-  });
+async function checkMidnightReset() {
+  const data = await browserAPI.storage.local.get(['lastResetDate']);
+  const today = new Date().toDateString();
+  if (data.lastResetDate !== today) {
+    await browserAPI.storage.local.set({
+      dailyTokens: 0,
+      lastResetDate: today
+    });
+    console.log('Claude Token Tracker: Daily counter reset');
+  }
 }
 
 // Check every hour
