@@ -13,7 +13,8 @@ if (browserAPI.runtime.onInstalled) {
       selectedPlan: 'pro', // Default to Pro plan
       counterLocked: false, // Default to unlocked
       counterPosition: null, // Will be set when user drags
-      counterSize: null // Will be set when user resizes
+      counterSize: null, // Will be set when user resizes
+      counterVisible: true // Default to visible
     });
     console.log('Claude Token Tracker: Storage initialized');
   });

@@ -52,6 +52,29 @@
   color: #333;
 }
 
+.close-button {
+  background: transparent;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: #666;
+  transition: all 0.2s ease;
+  font-weight: bold;
+}
+
+.close-button:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.close-button:active {
+  transform: scale(0.9);
+}
+
 .lock-button {
   background: transparent;
   border: 1px solid #d0d0d0;
@@ -233,6 +256,17 @@
 
   .counter-title {
     color: #e5e5e5;
+  }
+
+  .close-button {
+    border-color: #505050;
+    color: #a0a0a0;
+  }
+
+  .close-button:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #f87171;
+    color: #f87171;
   }
 
   .lock-button {

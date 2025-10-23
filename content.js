@@ -158,92 +158,69 @@ function observeMessages() {
 }
 
 // Make counter draggable
-function makeDraggable(counter, isLocked) {
+function makeDraggable(counter, dragHandle, isLocked) {
+  if (!dragHandle || isLocked) return;
+
   let isDragging = false;
-  let currentX;
-  let currentY;
-  let initialX;
-  let initialY;
-  let xOffset = 0;
-  let yOffset = 0;
-
-  const dragHandle = counter.querySelector('.drag-handle');
-
-  if (!dragHandle) return;
+  let startX, startY, startLeft, startTop;
 
   function dragStart(e) {
     if (isLocked) return;
 
-    if (e.type === 'touchstart') {
-      initialX = e.touches[0].clientX - xOffset;
-      initialY = e.touches[0].clientY - yOffset;
-    } else {
-      initialX = e.clientX - xOffset;
-      initialY = e.clientY - yOffset;
-    }
+    isDragging = true;
+    const rect = counter.getBoundingClientRect();
+    startLeft = rect.left;
+    startTop = rect.top;
+    startX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+    startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
 
-    if (e.target === dragHandle || dragHandle.contains(e.target)) {
-      isDragging = true;
-      counter.style.cursor = 'grabbing';
-    }
+    counter.style.transition = 'none';
+    dragHandle.style.cursor = 'grabbing';
+  }
+
+  function drag(e) {
+    if (!isDragging || isLocked) return;
+    e.preventDefault();
+
+    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+
+    const deltaX = clientX - startX;
+    const deltaY = clientY - startY;
+
+    counter.style.left = (startLeft + deltaX) + 'px';
+    counter.style.top = (startTop + deltaY) + 'px';
+    counter.style.right = 'auto';
+    counter.style.bottom = 'auto';
   }
 
   function dragEnd(e) {
     if (!isDragging) return;
-
-    initialX = currentX;
-    initialY = currentY;
     isDragging = false;
-    counter.style.cursor = 'default';
+    counter.style.transition = '';
+    dragHandle.style.cursor = isLocked ? 'default' : 'grab';
 
     // Save position to storage
     const rect = counter.getBoundingClientRect();
     browserAPI.storage.local.set({
       counterPosition: {
-        right: window.innerWidth - rect.right,
-        bottom: window.innerHeight - rect.bottom
+        left: rect.left,
+        top: rect.top
       }
     });
-  }
-
-  function drag(e) {
-    if (!isDragging || isLocked) return;
-
-    e.preventDefault();
-
-    if (e.type === 'touchmove') {
-      currentX = e.touches[0].clientX - initialX;
-      currentY = e.touches[0].clientY - initialY;
-    } else {
-      currentX = e.clientX - initialX;
-      currentY = e.clientY - initialY;
-    }
-
-    xOffset = currentX;
-    yOffset = currentY;
-
-    setTranslate(currentX, currentY, counter);
-  }
-
-  function setTranslate(xPos, yPos, el) {
-    el.style.transform = `translate(${xPos}px, ${yPos}px)`;
   }
 
   dragHandle.addEventListener('mousedown', dragStart);
   document.addEventListener('mousemove', drag);
   document.addEventListener('mouseup', dragEnd);
-
-  // Touch events for mobile
   dragHandle.addEventListener('touchstart', dragStart);
   document.addEventListener('touchmove', drag);
   document.addEventListener('touchend', dragEnd);
 }
 
 // Make counter resizable
-function makeResizable(counter, isLocked) {
-  const resizeHandle = counter.querySelector('.resize-handle');
-
-  if (!resizeHandle) return;
+function makeResizable(counter, resizeHandle, isLocked) {
+  if (!resizeHandle || isLocked) return;
 
   let isResizing = false;
   let startWidth, startHeight, startX, startY;
@@ -295,6 +272,13 @@ function makeResizable(counter, isLocked) {
 
 // Add token counter to the page
 function addTokenCounter() {
+  // Check if counter already exists
+  const existing = document.getElementById('token-counter');
+  if (existing) {
+    console.log('Token counter already exists, skipping...');
+    return;
+  }
+
   console.log('Adding token counter to page...');
 
   const counter = document.createElement('div');
@@ -311,8 +295,15 @@ function addTokenCounter() {
       'selectedPlan',
       'counterLocked',
       'counterPosition',
-      'counterSize'
+      'counterSize',
+      'counterVisible'
     ]);
+
+    // Check if user has hidden the counter
+    if (data.counterVisible === false) {
+      counter.style.display = 'none';
+      return;
+    }
 
     const current = data.currentConversationTokens || 0;
     const messages = data.currentMessageCount || 0;
@@ -342,6 +333,7 @@ function addTokenCounter() {
         <div class="counter-header">
           <div class="counter-title">Token Usage</div>
           <div class="header-controls">
+            <button id="close-button" class="close-button" title="Hide counter">×</button>
             <button id="lock-button" class="lock-button" title="${lockTitle}">${lockIcon}</button>
             <select id="plan-selector" class="plan-selector">
               <option value="free" ${plan === 'free' ? 'selected' : ''}>Free</option>
@@ -371,10 +363,10 @@ function addTokenCounter() {
 
     // Restore saved position
     if (data.counterPosition) {
-      counter.style.right = data.counterPosition.right + 'px';
-      counter.style.bottom = data.counterPosition.bottom + 'px';
-      counter.style.left = 'auto';
-      counter.style.top = 'auto';
+      counter.style.left = data.counterPosition.left + 'px';
+      counter.style.top = data.counterPosition.top + 'px';
+      counter.style.right = 'auto';
+      counter.style.bottom = 'auto';
     }
 
     // Restore saved size
@@ -382,6 +374,16 @@ function addTokenCounter() {
       counter.style.width = data.counterSize.width;
       counter.style.height = data.counterSize.height;
       counter.style.minWidth = '280px';
+    }
+
+    // Add event listener to close button
+    const closeButton = counter.querySelector('#close-button');
+    if (closeButton) {
+      closeButton.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        counter.style.display = 'none';
+        await browserAPI.storage.local.set({ counterVisible: false });
+      });
     }
 
     // Add event listener to lock button
@@ -408,9 +410,11 @@ function addTokenCounter() {
       });
     }
 
-    // Enable drag and resize if not locked
-    makeDraggable(counter, isLocked);
-    makeResizable(counter, isLocked);
+    // Enable drag and resize
+    const dragHandle = counter.querySelector('.drag-handle');
+    const resizeHandle = counter.querySelector('.resize-handle');
+    makeDraggable(counter, dragHandle, isLocked);
+    makeResizable(counter, resizeHandle, isLocked);
   }
 
   updateCounter();
